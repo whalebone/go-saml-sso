@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+    sso:
+        build: .
+        stdin_open: true
+        tty: true
+        environment: 
+            DOMAIN: 'http://localhost:8999/sso/'
+            PATH_PREFIX: '/sso'
+            PORT: '8000'
+            TOKEN_MAX_AGE: '5m'
+            IDP_META_URL: 'https://login.microsoftonline.com/10cc0bb4-92e2-4d2a-8138-606dd1d2961c/federationmetadata/2007-06/federationmetadata.xml'
+            # IDP_META_URL: 'https://samltest.id/saml/idp'
+            CERT: ''
+            KEY: ''
+        ports:
+            - 8999:8000/tcp
