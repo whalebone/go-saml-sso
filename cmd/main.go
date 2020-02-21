@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/spf13/viper"
 )
@@ -79,7 +80,10 @@ func main() {
 		Certificate:    keyPair.Leaf,
 		IDPMetadataURL: idpMetadataURL,
 		CookieName:     "SAMLToken",
+		CookieSecure:   true,
 	})
+	// set NameID format
+	samlSP.ServiceProvider.AuthnNameIDFormat = saml.UnspecifiedNameIDFormat
 
 	maxDuration, err := time.ParseDuration(viper.GetString("TOKEN_MAX_AGE"))
 	if err != nil {
@@ -91,6 +95,7 @@ func main() {
 	fmt.Println("Path prefix: ", prefix)
 	fmt.Println("SSO Metadata URL: ", samlSP.ServiceProvider.MetadataURL.String())
 	fmt.Println("SSO Acs URL: ", samlSP.ServiceProvider.AcsURL.String())
+	fmt.Println("SSO NameID Format: ", samlSP.ServiceProvider.AuthnNameIDFormat)
 
 	test := http.HandlerFunc(test)
 	auth := http.HandlerFunc(returnAfterAuth)
