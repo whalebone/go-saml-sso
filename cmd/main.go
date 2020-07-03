@@ -16,16 +16,24 @@ import (
 	"github.com/spf13/viper"
 )
 
+const cookieName = "SAMLToken"
+
 func test(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "<html><body>")
+	_, err := fmt.Fprintln(w, "<html><body>")
+	if err != nil {
+		return
+	}
 	name := samlsp.Token(r.Context()).Attributes.Get("cn")
 	if name != "" {
-		fmt.Fprintf(w, "<p>Hello, %s!</p>", name)
+		_, _ = fmt.Fprintf(w, "<p>Hello, %s!</p>", name)
 	}
 
-	jsonData, _ := json.MarshalIndent(samlsp.Token(r.Context()), "", "  ")
-	fmt.Fprintf(w, "<pre>Attrs:\n %s\n</pre>", jsonData)
-	fmt.Fprintln(w, "</body></html>")
+	jsonData, err := json.MarshalIndent(samlsp.Token(r.Context()), "", "  ")
+	if err != nil {
+		_, _ = fmt.Fprintf(w, "<pre>Attrs:\n %s\n</pre>", jsonData)
+	}
+
+	_, _ = fmt.Fprintln(w, "</body></html>")
 }
 
 func returnAfterAuth(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +87,7 @@ func main() {
 		Key:            keyPair.PrivateKey.(*rsa.PrivateKey),
 		Certificate:    keyPair.Leaf,
 		IDPMetadataURL: idpMetadataURL,
-		CookieName:     "SAMLToken",
+		CookieName:     cookieName,
 		CookieSecure:   true,
 	})
 	// set NameID format
@@ -96,6 +104,7 @@ func main() {
 	fmt.Println("SSO Metadata URL: ", samlSP.ServiceProvider.MetadataURL.String())
 	fmt.Println("SSO Acs URL: ", samlSP.ServiceProvider.AcsURL.String())
 	fmt.Println("SSO NameID Format: ", samlSP.ServiceProvider.AuthnNameIDFormat)
+	fmt.Println("Token max duration: ", samlSP.TokenMaxAge)
 
 	test := http.HandlerFunc(test)
 	auth := http.HandlerFunc(returnAfterAuth)
@@ -104,5 +113,8 @@ func main() {
 	http.Handle(prefix+"/saml/", samlSP)
 
 	fmt.Println("Listening on port: ", viper.GetString("PORT"))
-	http.ListenAndServe(":"+viper.GetString("PORT"), nil)
+	err = http.ListenAndServe(":"+viper.GetString("PORT"), nil)
+	if err != nil {
+		panic(err)
+	}
 }
