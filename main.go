@@ -73,7 +73,8 @@ func main() {
 	log.Println("Path prefix: ", prefix)
 
 	for name, samlSP := range samlProviders.samls {
-		samlPrefix := prefix + "/" + url.PathEscape(name)
+		samlPrefix := prefix // + "/" + url.PathEscape(name)
+		log.Println("Registering : ", name, " to ", samlPrefix)
 		http.Handle(samlPrefix+"/test", samlSP.RequireAccount(http.HandlerFunc(test)))
 		http.Handle(samlPrefix+"/auth", samlSP.RequireAccount(http.HandlerFunc(returnAfterAuth)))
 		http.Handle(samlPrefix+"/saml/", samlSP)

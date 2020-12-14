@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 	"time"
 )
@@ -112,7 +111,7 @@ func configureSaml(file string) (*SAMLService, error) {
 		}
 
 		samlUrl := *rootURL
-		samlUrl.Path = path.Join(samlUrl.Path, url.PathEscape(provider.Name), "saml")
+		//samlUrl.Path = path.Join(samlUrl.Path, url.PathEscape(provider.Name), "saml")
 		fmt.Println(samlUrl.String())
 
 		samlSP, _ := samlsp.New(samlsp.Options{
