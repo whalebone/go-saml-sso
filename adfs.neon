@@ -1,0 +1,13 @@
+parameters:
+    adfs:
+        sso:
+            uri: /sso/auth
+            returnParam: return
+            idpParam: idp
+        providers:
+            -
+                name: azure
+                metadata: ''
+                roles_key: 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
+                domains:
+                    - whalebone.io
