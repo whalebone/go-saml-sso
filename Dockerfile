@@ -3,7 +3,7 @@ FROM alpine:latest as certs
 RUN apk add --no-cache ca-certificates
 
 # build temporary image
-FROM golang:1.13 as build
+FROM golang:1.15 as build
 
 WORKDIR /go/src/github.com/whalebone/sso/code
 COPY go.mod ./

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -18,17 +19,34 @@ import (
 
 const cookieName = "SAMLToken"
 
+
+func fetchIDPMetadata(IDPMetadataURL *url.URL) (*saml.EntityDescriptor, error) {
+	if IDPMetadataURL == nil {
+		return nil, fmt.Errorf("must provide non null metadata URL")
+	}
+	httpClient := http.DefaultClient
+	metadata, err := samlsp.FetchMetadata(context.Background(), httpClient, *IDPMetadataURL)
+	if err != nil {
+		return nil, err
+	}
+	return metadata, nil
+}
+
 func test(w http.ResponseWriter, r *http.Request) {
 	_, err := fmt.Fprintln(w, "<html><body>")
 	if err != nil {
 		return
 	}
-	name := samlsp.Token(r.Context()).Attributes.Get("cn")
+
+	genericSession := samlsp.SessionFromContext(r.Context())
+	jwtSession := genericSession.(samlsp.JWTSessionClaims)
+
+	name := jwtSession.Attributes.Get("cn")
 	if name != "" {
 		_, _ = fmt.Fprintf(w, "<p>Hello, %s!</p>", name)
 	}
 
-	jsonData, err := json.MarshalIndent(samlsp.Token(r.Context()), "", "  ")
+	jsonData, err := json.MarshalIndent(jwtSession, "", "  ")
 	if err != nil {
 		_, _ = fmt.Fprintf(w, "<pre>Attrs:\n %s\n</pre>", jsonData)
 	}
@@ -76,35 +94,41 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("Identity Provider URL: ", idpMetadataURL.String())
+	idpMetadata, err := fetchIDPMetadata(idpMetadataURL)
+	if err != nil {
+		panic(err)
+	}
 
 	rootURL, err := url.Parse(viper.GetString("DOMAIN"))
 	if err != nil {
 		panic(err)
 	}
 
-	samlSP, _ := samlsp.New(samlsp.Options{
-		URL:            *rootURL,
-		Key:            keyPair.PrivateKey.(*rsa.PrivateKey),
-		Certificate:    keyPair.Leaf,
-		IDPMetadataURL: idpMetadataURL,
-		CookieName:     cookieName,
-		CookieSecure:   true,
-	})
-	// set NameID format
-	samlSP.ServiceProvider.AuthnNameIDFormat = saml.UnspecifiedNameIDFormat
-
 	maxDuration, err := time.ParseDuration(viper.GetString("TOKEN_MAX_AGE"))
 	if err != nil {
 		panic(err)
 	}
-	samlSP.TokenMaxAge = maxDuration
+
+	samlSP, _ := samlsp.New(samlsp.Options{
+		URL:          *rootURL,
+		Key:          keyPair.PrivateKey.(*rsa.PrivateKey),
+		Certificate:  keyPair.Leaf,
+		IDPMetadata:  idpMetadata,
+		CookieName:   cookieName,
+		CookieMaxAge: maxDuration,
+	})
+	// set NameID format
+	samlSP.ServiceProvider.AuthnNameIDFormat = saml.UnspecifiedNameIDFormat
 
 	prefix := viper.GetString("PATH_PREFIX")
 	fmt.Println("Path prefix: ", prefix)
 	fmt.Println("SSO Metadata URL: ", samlSP.ServiceProvider.MetadataURL.String())
 	fmt.Println("SSO Acs URL: ", samlSP.ServiceProvider.AcsURL.String())
 	fmt.Println("SSO NameID Format: ", samlSP.ServiceProvider.AuthnNameIDFormat)
-	fmt.Println("Token max duration: ", samlSP.TokenMaxAge)
+	sessionProvider, ok := samlSP.Session.(samlsp.CookieSessionProvider)
+	if ok {
+		fmt.Println("Token max duration: ", sessionProvider.MaxAge)
+	}
 
 	test := http.HandlerFunc(test)
 	auth := http.HandlerFunc(returnAfterAuth)
