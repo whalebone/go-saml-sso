@@ -114,6 +114,7 @@ func main() {
 		Key:          keyPair.PrivateKey.(*rsa.PrivateKey),
 		Certificate:  keyPair.Leaf,
 		IDPMetadata:  idpMetadata,
+		CookieDomain: "whalebone.io",
 		CookieName:   cookieName,
 		CookieMaxAge: maxDuration,
 	})
