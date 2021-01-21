@@ -1,67 +1,24 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/crewjam/saml/samlsp"
 	"github.com/spf13/viper"
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 )
-
-const cookieName = "SAMLToken"
-
-func test(w http.ResponseWriter, r *http.Request) {
-	_, err := fmt.Fprintln(w, "<html><body>")
-	if err != nil {
-		return
-	}
-
-	genericSession := samlsp.SessionFromContext(r.Context())
-	jwtSession := genericSession.(samlsp.JWTSessionClaims)
-
-	name := jwtSession.Attributes.Get("cn")
-	if name != "" {
-		_, _ = fmt.Fprintf(w, "<p>Hello, %s!</p>", name)
-	}
-
-	jsonData, err := json.MarshalIndent(jwtSession, "", "  ")
-	if err != nil {
-		_, _ = fmt.Fprintf(w, "<pre>Attrs:\n %s\n</pre>", jsonData)
-	}
-
-	_, _ = fmt.Fprintln(w, "</body></html>")
-}
-
-func returnAfterAuth(w http.ResponseWriter, r *http.Request) {
-	returnURL, err := url.Parse(r.URL.Query().Get("return"))
-	if err != nil {
-		http.Error(w, "invalid return url", http.StatusBadRequest)
-		return
-	}
-	cook, err := r.Cookie(cookieName)
-	if err != nil {
-		http.Error(w, "missing saml cookie", http.StatusBadRequest)
-		return
-	}
-
-	// add saml value
-	q := returnURL.Query()
-	q.Add("saml", cook.Value)
-	returnURL.RawQuery = q.Encode()
-
-	w.Header().Add("Location", returnURL.String())
-	w.WriteHeader(http.StatusFound)
-	return
-}
 
 func main() {
 	viper.AutomaticEnv()
 	viper.SetDefault("DOMAIN", "http://localhost")
+	viper.SetDefault("COOKIE_DOMAIN", "localhost")
 	viper.SetDefault("PATH_PREFIX", "")
 	viper.SetDefault("PORT", "8000")
-	viper.SetDefault("TOKEN_MAX_AGE", "10h")
+	viper.SetDefault("TOKEN_MAX_AGE", "5m")
+
+	prefix := ensureAbsolute(viper.GetString("PATH_PREFIX"))
+	log.Println("Path prefix: ", prefix)
 
 	samlProviders, err := configureSaml("adfs.neon")
 	if err != nil {
@@ -69,12 +26,9 @@ func main() {
 		panic(err)
 	}
 
-	prefix := viper.GetString("PATH_PREFIX")
-	log.Println("Path prefix: ", prefix)
-
 	for name, samlSP := range samlProviders.samls {
-		samlPrefix := prefix // + "/" + url.PathEscape(name)
-		log.Println("Registering : ", name, " to ", samlPrefix)
+		samlPrefix := path.Join(prefix, url.PathEscape(name))
+		log.Println("Registering ", name, " to ", samlPrefix)
 		http.Handle(samlPrefix+"/test", samlSP.RequireAccount(http.HandlerFunc(test)))
 		http.Handle(samlPrefix+"/auth", samlSP.RequireAccount(http.HandlerFunc(returnAfterAuth)))
 		http.Handle(samlPrefix+"/saml/", samlSP)
@@ -85,4 +39,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func ensureAbsolute(path string) string {
+	if path[0] == '/' {
+		return path
+	}
+	return "/" + path
 }

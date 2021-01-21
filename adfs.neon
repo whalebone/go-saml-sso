@@ -1,3 +1,4 @@
+# example of configuration file
 parameters:
     adfs:
         sso:
@@ -6,8 +7,6 @@ parameters:
             idpParam: idp
         providers:
             -
-                name: azure
-                metadata: ''
-                roles_key: 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
-                domains:
-                    - whalebone.io
+                name: samltest
+                metadata: 'https://samltest.id/saml/idp'
+                nameid_format: 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified'

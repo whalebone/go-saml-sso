@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 )
@@ -38,11 +39,25 @@ type sso struct {
 }
 
 type provider struct {
-	Name     string `yaml:"name"`
-	Metadata string `yaml:"metadata"`
+	Name         string            `yaml:"name"`
+	Metadata     string            `yaml:"metadata"`
+	NameIDFormat saml.NameIDFormat `yaml:"nameid_format"`
 	//CustomerID string   `yaml:"customer_id"`
 	//RolesKey   string   `yaml:"roles_key"`
 	//Domains    []string `yaml:"domains"`
+}
+
+func (p *provider) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type rawProvider provider
+	raw := rawProvider{ // defaults
+		NameIDFormat: saml.UnspecifiedNameIDFormat,
+	}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+
+	*p = provider(raw)
+	return nil
 }
 
 func readCert(key string) []byte {
@@ -68,6 +83,8 @@ func configureSaml(file string) (*SAMLService, error) {
 		return nil, fmt.Errorf("error parsing root domain, %w", err)
 	}
 
+	cookieDomain := viper.GetString("COOKIE_DOMAIN")
+
 	keyPair, err := tls.X509KeyPair(readCert("CERT"), readCert("KEY"))
 	if err != nil {
 		return nil, fmt.Errorf("missing or invalid CERT and KEY environment variables, %w", err)
@@ -87,7 +104,7 @@ func configureSaml(file string) (*SAMLService, error) {
 
 	var config config
 	srv := &SAMLService{
-		samls: make(map[string]*samlsp.Middleware, 0),
+		samls: make(map[string]*samlsp.Middleware),
 	}
 
 	yamlFile, err := ioutil.ReadFile(file)
@@ -101,7 +118,7 @@ func configureSaml(file string) (*SAMLService, error) {
 	}
 
 	for _, provider := range config.Parameters.ADFS.Providers {
-		if _, found := srv.samls[provider.Name]; found == true {
+		if _, found := srv.samls[provider.Name]; found {
 			return nil, fmt.Errorf("duplicate provider with name '%s'", provider.Name)
 		}
 
@@ -110,22 +127,28 @@ func configureSaml(file string) (*SAMLService, error) {
 			return nil, fmt.Errorf("invalid url %v: %w", provider.Metadata, err)
 		}
 
-		samlUrl := *rootURL
-		//samlUrl.Path = path.Join(samlUrl.Path, url.PathEscape(provider.Name), "saml")
+		samlUrl, err := rootURL.Parse(path.Join(rootURL.Path, url.PathEscape(provider.Name)) + "/")
+		if err != nil {
+			return nil, fmt.Errorf("invalid saml url %s: %w", provider.Name, err)
+		}
 		fmt.Println(samlUrl.String())
 
 		samlSP, _ := samlsp.New(samlsp.Options{
-			URL:            samlUrl,
+			URL:            *samlUrl,
 			Key:            keyPair.PrivateKey.(*rsa.PrivateKey),
 			Certificate:    keyPair.Leaf,
 			IDPMetadataURL: idpMetadataURL,
 			CookieName:     cookieName,
 			CookieSecure:   true,
-			CookieDomain:   "whalebone.io",
+			CookieDomain:   cookieDomain,
 			CookieMaxAge:   maxDuration,
 		})
+		if samlSP == nil {
+			return nil, fmt.Errorf("could not configure provider with name '%s'", provider.Name)
+		}
+
 		// set NameID format
-		samlSP.ServiceProvider.AuthnNameIDFormat = saml.UnspecifiedNameIDFormat
+		samlSP.ServiceProvider.AuthnNameIDFormat = provider.NameIDFormat
 
 		srv.samls[provider.Name] = samlSP
 

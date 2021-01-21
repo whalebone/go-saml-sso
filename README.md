@@ -9,10 +9,10 @@ ENVs for docker container:
 - CERT - string with client CA certificate - `awk 1 ORS='\\n' myservice.cert`
 - KEY  - string with private key - `awk 1 ORS='\\n' myservice.key`
 - PORT - Port on which service listens, default 8000
-- DOMAIN - URL under which service handles requests, default 'http://localhost'
+- DOMAIN - URL under which service handles requests, default 'http://localhost', must include PATH_PREFIX at the end
 - PATH_PREFIX - Path prefix which should be added to base if it runs under, default '' ( example for portal `/sso` )
-- TOKEN_MAX_AGE - Duration of final JWT token - default 10 hours. input as [Golang time.Duration](https://golang.org/pkg/time/#ParseDuration)
-- IDP_META_URL - URL of identity provider metadata XML file
+- COOKIE_DOMAIN - For which domain the cookies are set (can be wider than DOMAIN), default 'localhost'
+- TOKEN_MAX_AGE - Duration of final JWT token - default 5 minutes. input as [Golang time.Duration](https://golang.org/pkg/time/#ParseDuration)
 
 Urls:
 - **/test** - Requires SAML authentication and outputs resulting Claims
