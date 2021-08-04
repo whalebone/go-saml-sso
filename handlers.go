@@ -8,9 +8,7 @@ import (
 	"net/url"
 )
 
-const cookieName = "SAMLToken"
-
-func test(w http.ResponseWriter, r *http.Request) {
+func testAuth(w http.ResponseWriter, r *http.Request) {
 	_, err := fmt.Fprintln(w, "<html><body>")
 	if err != nil {
 		return
@@ -34,13 +32,24 @@ func test(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintln(w, "</body></html>")
 }
 
-func returnAfterAuth(w http.ResponseWriter, r *http.Request) {
-	returnURL, err := url.Parse(r.URL.Query().Get("return"))
-	if err != nil || returnURL.String() == "" {
-		http.Error(w, "invalid return url", http.StatusBadRequest)
-		return
-	}
+func returnIDPAfterAuth(idpName string, cookieDomain string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		returnURL, err := url.Parse(r.URL.Query().Get(ReturnURLKey))
+		if err != nil || returnURL.String() == "" {
+			http.Error(w, "invalid return url", http.StatusBadRequest)
+			return
+		}
 
-	w.Header().Add("Location", returnURL.String())
-	w.WriteHeader(http.StatusFound)
+		cookie := &http.Cookie{
+			Name:     IdpCookieName,
+			Value:    idpName,
+			Domain:   cookieDomain,
+			Secure:   true,
+			HttpOnly: true,
+		}
+
+		http.SetCookie(w, cookie)
+		w.Header().Add("Location", returnURL.String())
+		w.WriteHeader(http.StatusFound)
+	}
 }

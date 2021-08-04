@@ -9,6 +9,15 @@ import (
 	"path"
 )
 
+// IdpCookieName defines cookie name for used SAML Ident. Provider
+const IdpCookieName = "SAML_IDP"
+
+// ReturnURLKey Defines parameter name that has return url after SAML auth
+const ReturnURLKey = "return"
+
+// cookieName Defines SAML token cookie name
+const cookieName = "SAMLToken"
+
 func main() {
 	viper.AutomaticEnv()
 	viper.SetDefault("DOMAIN", "http://localhost")
@@ -20,7 +29,9 @@ func main() {
 	prefix := ensureAbsolute(viper.GetString("PATH_PREFIX"))
 	log.Println("Path prefix: ", prefix)
 
-	samlProviders, err := configureSaml("adfs.neon")
+	cookieDomain := viper.GetString("COOKIE_DOMAIN")
+
+	samlProviders, err := configureSaml("adfs.neon", cookieDomain)
 	if err != nil {
 		fmt.Println("Error reading configuration")
 		panic(err)
@@ -29,8 +40,8 @@ func main() {
 	for name, samlSP := range samlProviders.samls {
 		samlPrefix := path.Join(prefix, url.PathEscape(name))
 		log.Println("Registering ", name, " to ", samlPrefix)
-		http.Handle(samlPrefix+"/test", samlSP.RequireAccount(http.HandlerFunc(test)))
-		http.Handle(samlPrefix+"/auth", samlSP.RequireAccount(http.HandlerFunc(returnAfterAuth)))
+		// http.Handle(samlPrefix+"/test", samlSP.RequireAccount(http.HandlerFunc(testAuth)))
+		http.Handle(samlPrefix+"/auth", samlSP.RequireAccount(http.HandlerFunc(returnIDPAfterAuth(name, cookieDomain))))
 		http.Handle(samlPrefix+"/saml/", samlSP)
 	}
 

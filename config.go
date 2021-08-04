@@ -77,13 +77,11 @@ func fetchIDPMetadata(IDPMetadataURL *url.URL) (*saml.EntityDescriptor, error) {
 	return metadata, nil
 }
 
-func configureSaml(file string) (*SAMLService, error) {
+func configureSaml(file string, cookieDomain string) (*SAMLService, error) {
 	rootURL, err := url.Parse(viper.GetString("DOMAIN"))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing root domain, %w", err)
 	}
-
-	cookieDomain := viper.GetString("COOKIE_DOMAIN")
 
 	keyPair, err := tls.X509KeyPair(readCert("CERT"), readCert("KEY"))
 	if err != nil {
@@ -127,14 +125,14 @@ func configureSaml(file string) (*SAMLService, error) {
 			return nil, fmt.Errorf("invalid url %v: %w", provider.Metadata, err)
 		}
 
-		samlUrl, err := rootURL.Parse(path.Join(rootURL.Path, url.PathEscape(provider.Name)) + "/")
+		samlURL, err := rootURL.Parse(path.Join(rootURL.Path, url.PathEscape(provider.Name)) + "/")
 		if err != nil {
 			return nil, fmt.Errorf("invalid saml url %s: %w", provider.Name, err)
 		}
-		fmt.Println(samlUrl.String())
+		fmt.Println(samlURL.String())
 
 		samlSP, _ := samlsp.New(samlsp.Options{
-			URL:            *samlUrl,
+			URL:            *samlURL,
 			Key:            keyPair.PrivateKey.(*rsa.PrivateKey),
 			Certificate:    keyPair.Leaf,
 			IDPMetadataURL: idpMetadataURL,
