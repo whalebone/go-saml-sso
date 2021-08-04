@@ -6,6 +6,7 @@ import (
 	"github.com/crewjam/saml/samlsp"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 func testAuth(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +33,8 @@ func testAuth(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintln(w, "</body></html>")
 }
 
-func returnIDPAfterAuth(idpName string, cookieDomain string) func(w http.ResponseWriter, r *http.Request) {
+func returnIDPAfterAuth(idpName string, cookieDomain string, cookieMaxAge time.Duration) func(w http.ResponseWriter, r *http.Request) {
+	maxAgeSeconds := int(cookieMaxAge / time.Second)
 	return func(w http.ResponseWriter, r *http.Request) {
 		returnURL, err := url.Parse(r.URL.Query().Get(ReturnURLKey))
 		if err != nil || returnURL.String() == "" {
@@ -44,6 +46,7 @@ func returnIDPAfterAuth(idpName string, cookieDomain string) func(w http.Respons
 			Name:     IdpCookieName,
 			Value:    idpName,
 			Domain:   cookieDomain,
+			MaxAge:   maxAgeSeconds,
 			Secure:   true,
 			HttpOnly: true,
 		}

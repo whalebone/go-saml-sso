@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"time"
 )
 
 // IdpCookieName defines cookie name for used SAML Ident. Provider
@@ -30,8 +31,13 @@ func main() {
 	log.Println("Path prefix: ", prefix)
 
 	cookieDomain := viper.GetString("COOKIE_DOMAIN")
+	maxDuration, err := time.ParseDuration(viper.GetString("TOKEN_MAX_AGE"))
+	if err != nil {
+		panic(fmt.Errorf("missing or invalid TOKEN_MAX_AGE environment variable, %w", err))
+	}
 
-	samlProviders, err := configureSaml("adfs.neon", cookieDomain)
+
+	samlProviders, err := configureSaml("adfs.neon", cookieDomain, maxDuration)
 	if err != nil {
 		fmt.Println("Error reading configuration")
 		panic(err)
@@ -41,7 +47,7 @@ func main() {
 		samlPrefix := path.Join(prefix, url.PathEscape(name))
 		log.Println("Registering ", name, " to ", samlPrefix)
 		// http.Handle(samlPrefix+"/test", samlSP.RequireAccount(http.HandlerFunc(testAuth)))
-		http.Handle(samlPrefix+"/auth", samlSP.RequireAccount(http.HandlerFunc(returnIDPAfterAuth(name, cookieDomain))))
+		http.Handle(samlPrefix+"/auth", samlSP.RequireAccount(http.HandlerFunc(returnIDPAfterAuth(name, cookieDomain, maxDuration))))
 		http.Handle(samlPrefix+"/saml/", samlSP)
 	}
 

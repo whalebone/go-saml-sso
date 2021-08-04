@@ -77,7 +77,7 @@ func fetchIDPMetadata(IDPMetadataURL *url.URL) (*saml.EntityDescriptor, error) {
 	return metadata, nil
 }
 
-func configureSaml(file string, cookieDomain string) (*SAMLService, error) {
+func configureSaml(file string, cookieDomain string, cookieMaxDuration time.Duration) (*SAMLService, error) {
 	rootURL, err := url.Parse(viper.GetString("DOMAIN"))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing root domain, %w", err)
@@ -94,11 +94,6 @@ func configureSaml(file string, cookieDomain string) (*SAMLService, error) {
 	}
 
 	log.Println("Certificate for: ", keyPair.Leaf.Subject.String())
-
-	maxDuration, err := time.ParseDuration(viper.GetString("TOKEN_MAX_AGE"))
-	if err != nil {
-		return nil, fmt.Errorf("missing or invalid TOKEN_MAX_AGE environment variable, %w", err)
-	}
 
 	var config config
 	srv := &SAMLService{
@@ -139,7 +134,7 @@ func configureSaml(file string, cookieDomain string) (*SAMLService, error) {
 			CookieName:     cookieName,
 			CookieSecure:   true,
 			CookieDomain:   cookieDomain,
-			CookieMaxAge:   maxDuration,
+			CookieMaxAge:   cookieMaxDuration,
 		})
 		if samlSP == nil {
 			return nil, fmt.Errorf("could not configure provider with name '%s'", provider.Name)
