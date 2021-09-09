@@ -6,8 +6,7 @@ RUN apk add --no-cache ca-certificates
 FROM golang:1.16 as build
 
 WORKDIR /go/src/github.com/whalebone/go-saml-sso
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . ./

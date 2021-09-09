@@ -49,6 +49,7 @@ func returnIDPAfterAuth(idpName string, cookieDomain string, cookieMaxAge time.D
 			MaxAge:   maxAgeSeconds,
 			Secure:   true,
 			HttpOnly: true,
+			Path:     "/",
 		}
 
 		http.SetCookie(w, cookie)
