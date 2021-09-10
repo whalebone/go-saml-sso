@@ -124,7 +124,6 @@ func configureSaml(file string, cookieDomain string, cookieMaxDuration time.Dura
 		if err != nil {
 			return nil, fmt.Errorf("invalid saml url %s: %w", provider.Name, err)
 		}
-		fmt.Println(samlURL.String())
 
 		samlSP, _ := samlsp.New(samlsp.Options{
 			URL:            *samlURL,

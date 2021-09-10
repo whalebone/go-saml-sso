@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/spf13/viper"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"path"
+	"syscall"
 	"time"
 )
 
@@ -36,10 +41,50 @@ func main() {
 		panic(fmt.Errorf("missing or invalid TOKEN_MAX_AGE environment variable, %w", err))
 	}
 
+	setupHttpHandlers(cookieDomain, maxDuration, prefix)
+	var server *http.Server
 
+	termChan := make(chan bool, 1) // For signalling termination from main to go-routine
+	// Start server
+	go func() {
+		addr := ":" + viper.GetString("PORT")
+		log.Println("Listening on port", addr)
+
+		server = &http.Server{Addr: addr, Handler: nil}
+		err = server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Println("error starting server")
+			panic(err)
+		}
+
+		termChan <- true
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the app
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case <-quit:
+		log.Println("signal to shutdown received")
+	case <-termChan:
+		log.Println("application terminated")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Println("error shutting down app ", err)
+	}
+
+	log.Println("bye")
+}
+
+func setupHttpHandlers(cookieDomain string, maxDuration time.Duration, prefix string) {
 	samlProviders, err := configureSaml("adfs.neon", cookieDomain, maxDuration)
 	if err != nil {
-		fmt.Println("Error reading configuration")
+		log.Println("Error reading configuration")
 		panic(err)
 	}
 
@@ -50,17 +95,18 @@ func main() {
 		http.Handle(samlPrefix+"/auth", samlSP.RequireAccount(http.HandlerFunc(returnIDPAfterAuth(name, cookieDomain, maxDuration))))
 		http.Handle(samlPrefix+"/saml/", samlSP)
 	}
-
-	fmt.Println("Listening on port: ", viper.GetString("PORT"))
-	err = http.ListenAndServe(":"+viper.GetString("PORT"), nil)
-	if err != nil {
-		panic(err)
-	}
 }
 
+// Shutdown
+
 func ensureAbsolute(path string) string {
+	if len(path) == 0 {
+		return "/"
+	}
+
 	if path[0] == '/' {
 		return path
 	}
+
 	return "/" + path
 }
