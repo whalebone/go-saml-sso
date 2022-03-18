@@ -3,17 +3,16 @@ FROM alpine:latest as certs
 RUN apk add --no-cache ca-certificates
 
 # build temporary image
-FROM golang:1.16 as build
+FROM golang:1.18-alpine as build
 
 WORKDIR /go/src/github.com/whalebone/go-saml-sso
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download && go mod verify
 
 COPY . ./
 RUN CGO_ENABLED=0 go build
 
 # final prod image
-#FROM alpine:3.11
 FROM scratch
 
 WORKDIR /go/bin

@@ -1,0 +1,27 @@
+name: Build release docker image and push to Harbor
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  HARBOR_USER: sa-push
+
+jobs:
+  Built-login-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build and push image
+        run: |-
+          VERSION_TAG=$(git describe --exact-match --tags | sed -e 's/^v//')
+          IMAGE_ID=harbor.whalebone.io/whalebone/${{ github.event.repository.name }}:$VERSION_TAG
+
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+
+          docker build . --file Dockerfile --tag $IMAGE_ID
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login harbor.whalebone.io/whalebone -u ${{ env.HARBOR_USER }} --password-stdin
+          docker push $IMAGE_ID
