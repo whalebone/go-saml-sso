@@ -1,6 +1,6 @@
 module github.com/whalebone/go-saml-sso
 
-go 1.15
+go 1.18
 
 require (
 	github.com/crewjam/saml v0.4.4
