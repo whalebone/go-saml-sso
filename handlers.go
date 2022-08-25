@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/crewjam/saml/samlsp"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/crewjam/saml/samlsp"
 )
 
 func testAuth(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +53,8 @@ func returnIDPAfterAuth(idpName string, cookieDomain string, cookieMaxAge time.D
 			HttpOnly: true,
 			Path:     "/",
 		}
+
+		log.Println("Returning after login in '", idpName, "' to ", returnURL.String())
 
 		http.SetCookie(w, cookie)
 		w.Header().Add("Location", returnURL.String())
