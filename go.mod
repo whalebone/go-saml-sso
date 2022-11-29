@@ -3,7 +3,7 @@ module github.com/whalebone/go-saml-sso
 go 1.18
 
 require (
-	github.com/crewjam/saml v0.4.4
+	github.com/crewjam/saml v0.4.9
 	github.com/spf13/viper v1.12.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -11,8 +11,8 @@ require (
 require (
 	github.com/beevik/etree v1.1.0 // indirect
 	github.com/crewjam/httperr v0.2.0 // indirect
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jonboulle/clockwork v0.2.2 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
