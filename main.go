@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"log"
 	"net/http"
 	"net/url"
@@ -13,6 +12,8 @@ import (
 	"path"
 	"syscall"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 // IdpCookieName defines cookie name for used SAML Ident. Provider
@@ -26,7 +27,7 @@ const cookieName = "SAMLToken"
 
 func main() {
 	viper.AutomaticEnv()
-	viper.SetDefault("DOMAIN", "http://localhost")
+	viper.SetDefault("DOMAIN", "http://localhost:8000")
 	viper.SetDefault("COOKIE_DOMAIN", "localhost")
 	viper.SetDefault("PATH_PREFIX", "")
 	viper.SetDefault("PORT", "8000")

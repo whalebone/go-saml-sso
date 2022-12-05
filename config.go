@@ -6,18 +6,21 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"strings"
+	"time"
+
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"net/url"
-	"path"
-	"strings"
-	"time"
 )
+
+const metadataFetchTimeout = time.Second * 20
 
 type SAMLService struct {
 	samls map[string]*samlsp.Middleware
@@ -70,7 +73,10 @@ func fetchIDPMetadata(IDPMetadataURL *url.URL) (*saml.EntityDescriptor, error) {
 		return nil, fmt.Errorf("must provide non null metadata URL")
 	}
 	httpClient := http.DefaultClient
-	metadata, err := samlsp.FetchMetadata(context.Background(), httpClient, *IDPMetadataURL)
+	ctx, cancel := context.WithTimeout(context.Background(), metadataFetchTimeout)
+	defer cancel()
+
+	metadata, err := samlsp.FetchMetadata(ctx, httpClient, *IDPMetadataURL)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +106,7 @@ func configureSaml(file string, cookieDomain string, cookieMaxDuration time.Dura
 		samls: make(map[string]*samlsp.Middleware),
 	}
 
-	yamlFile, err := ioutil.ReadFile(file)
+	yamlFile, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("error reading file %s: %w", file, err)
 	}
@@ -120,23 +126,34 @@ func configureSaml(file string, cookieDomain string, cookieMaxDuration time.Dura
 			return nil, fmt.Errorf("invalid url %v: %w", provider.Metadata, err)
 		}
 
+		idpDescriptor, err := fetchIDPMetadata(idpMetadataURL)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching idp metadata %v: %w", provider.Metadata, err)
+		}
+
 		samlURL, err := rootURL.Parse(path.Join(rootURL.Path, url.PathEscape(provider.Name)) + "/")
 		if err != nil {
 			return nil, fmt.Errorf("invalid saml url %s: %w", provider.Name, err)
 		}
 
-		samlSP, _ := samlsp.New(samlsp.Options{
-			URL:            *samlURL,
-			Key:            keyPair.PrivateKey.(*rsa.PrivateKey),
-			Certificate:    keyPair.Leaf,
-			IDPMetadataURL: idpMetadataURL,
-			CookieName:     cookieName,
-			CookieSecure:   true,
-			CookieDomain:   cookieDomain,
-			CookieMaxAge:   cookieMaxDuration,
-		})
+		opts := samlsp.Options{
+			URL:         *samlURL,
+			Key:         keyPair.PrivateKey.(*rsa.PrivateKey),
+			Certificate: keyPair.Leaf,
+			IDPMetadata: idpDescriptor,
+		}
+		samlSP, _ := samlsp.New(opts)
 		if samlSP == nil {
 			return nil, fmt.Errorf("could not configure provider with name '%s'", provider.Name)
+		}
+		samlSP.Session = samlsp.CookieSessionProvider{
+			Name:     cookieName,
+			Domain:   samlURL.Host,
+			MaxAge:   cookieMaxDuration,
+			HTTPOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteDefaultMode,
+			Codec:    samlsp.DefaultSessionCodec(opts),
 		}
 
 		// set NameID format
