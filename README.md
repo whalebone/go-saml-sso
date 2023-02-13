@@ -13,6 +13,7 @@ ENVs for docker container:
 - PATH_PREFIX - Path prefix which should be added to base if it runs under, default '' ( example for portal `/sso` )
 - COOKIE_DOMAIN - For which domain the cookies are set (can be wider than DOMAIN), default 'localhost'
 - TOKEN_MAX_AGE - Duration of final JWT token - default 5 minutes. input as [Golang time.Duration](https://golang.org/pkg/time/#ParseDuration)
+- DEBUG - set to 1 to enable the test endpoint, default 0
 
 Urls:
 - **/test** - Requires SAML authentication and outputs resulting Claims
