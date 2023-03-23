@@ -1,16 +1,13 @@
 package main
 
 import (
-	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -26,7 +23,7 @@ type SAMLService struct {
 	samls map[string]*samlsp.Middleware
 }
 
-type config struct {
+type adfsConfig struct {
 	Parameters struct {
 		ADFS struct {
 			SSO       sso        `yaml:"sso"`
@@ -36,7 +33,7 @@ type config struct {
 }
 
 type sso struct {
-	Uri         string `yaml:"uri"`
+	URI         string `yaml:"uri"`
 	ReturnParam string `yaml:"returnParam"`
 	IdpParam    string `yaml:"idpParam"`
 }
@@ -45,9 +42,6 @@ type provider struct {
 	Name         string            `yaml:"name"`
 	Metadata     string            `yaml:"metadata"`
 	NameIDFormat saml.NameIDFormat `yaml:"nameid_format"`
-	//CustomerID string   `yaml:"customer_id"`
-	//RolesKey   string   `yaml:"roles_key"`
-	//Domains    []string `yaml:"domains"`
 }
 
 func (p *provider) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -68,44 +62,27 @@ func readCert(key string) []byte {
 	return []byte(certHandler.Replace(viper.GetString(key)))
 }
 
-func fetchIDPMetadata(IDPMetadataURL *url.URL) (*saml.EntityDescriptor, error) {
-	if IDPMetadataURL == nil {
-		return nil, fmt.Errorf("must provide non null metadata URL")
-	}
-	httpClient := http.DefaultClient
-	ctx, cancel := context.WithTimeout(context.Background(), metadataFetchTimeout)
-	defer cancel()
-
-	metadata, err := samlsp.FetchMetadata(ctx, httpClient, *IDPMetadataURL)
-	if err != nil {
-		return nil, err
-	}
-	return metadata, nil
-}
-
-func configureSaml(file string, cookieDomain string, cookieMaxDuration time.Duration) (*SAMLService, error) {
+func configureSamlService(config *adfsConfig, cookieMaxDuration time.Duration) (*SAMLService, error) {
 	rootURL, err := url.Parse(viper.GetString("DOMAIN"))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing root domain, %w", err)
 	}
 
-	keyPair, err := tls.X509KeyPair(readCert("CERT"), readCert("KEY"))
+	cert, err := parseCertificates()
 	if err != nil {
-		return nil, fmt.Errorf("missing or invalid CERT and KEY environment variables, %w", err)
+		return nil, err
 	}
 
-	keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
-	if err != nil {
-		return nil, fmt.Errorf("missing or invalid CERT and KEY environment variables, %w", err)
-	}
+	return createSAMLService(&ServiceConfig{
+		Certificate:       cert,
+		Providers:         config.Parameters.ADFS.Providers,
+		RootURL:           rootURL,
+		CookieMaxDuration: cookieMaxDuration,
+	})
+}
 
-	log.Println("Certificate for: ", keyPair.Leaf.Subject.String())
-
-	var config config
-	srv := &SAMLService{
-		samls: make(map[string]*samlsp.Middleware),
-	}
-
+func parseConfigYaml(file string) (*adfsConfig, error) {
+	var config adfsConfig
 	yamlFile, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("error reading file %s: %w", file, err)
@@ -116,60 +93,43 @@ func configureSaml(file string, cookieDomain string, cookieMaxDuration time.Dura
 		return nil, fmt.Errorf("error parsing file %s: %w", file, err)
 	}
 
-	for _, provider := range config.Parameters.ADFS.Providers {
-		if _, found := srv.samls[provider.Name]; found {
-			return nil, fmt.Errorf("duplicate provider with name '%s'", provider.Name)
-		}
+	return &config, nil
+}
 
-		idpMetadataURL, err := url.Parse(provider.Metadata)
-		if err != nil {
-			return nil, fmt.Errorf("invalid url %v: %w", provider.Metadata, err)
-		}
+type certPair struct {
+	keyPair       tls.Certificate
+	rsaPrivateKey *rsa.PrivateKey
+}
 
-		idpDescriptor, err := fetchIDPMetadata(idpMetadataURL)
-		if err != nil {
-			return nil, fmt.Errorf("error fetching idp metadata %v: %w", provider.Metadata, err)
-		}
-
-		samlURL, err := rootURL.Parse(path.Join(rootURL.Path, url.PathEscape(provider.Name)) + "/")
-		if err != nil {
-			return nil, fmt.Errorf("invalid saml url %s: %w", provider.Name, err)
-		}
-
-		opts := samlsp.Options{
-			URL:         *samlURL,
-			Key:         keyPair.PrivateKey.(*rsa.PrivateKey),
-			Certificate: keyPair.Leaf,
-			IDPMetadata: idpDescriptor,
-		}
-		samlSP, _ := samlsp.New(opts)
-		if samlSP == nil {
-			return nil, fmt.Errorf("could not configure provider with name '%s'", provider.Name)
-		}
-		samlSP.Session = samlsp.CookieSessionProvider{
-			Name:     cookieName,
-			Domain:   samlURL.Host,
-			MaxAge:   cookieMaxDuration,
-			HTTPOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteDefaultMode,
-			Codec:    samlsp.DefaultSessionCodec(opts),
-		}
-
-		// set NameID format
-		samlSP.ServiceProvider.AuthnNameIDFormat = provider.NameIDFormat
-
-		srv.samls[provider.Name] = samlSP
-
-		log.Printf("Added provider '%s'\n", provider.Name)
-		log.Println("\tSSO Metadata URL: ", samlSP.ServiceProvider.MetadataURL.String())
-		log.Println("\tSSO Acs URL: ", samlSP.ServiceProvider.AcsURL.String())
-		log.Println("\tSSO NameID Format: ", samlSP.ServiceProvider.AuthnNameIDFormat)
-		sessionProvider, ok := samlSP.Session.(samlsp.CookieSessionProvider)
-		if ok {
-			log.Println("\tToken max duration: ", sessionProvider.MaxAge)
-		}
+func parseCertificates() (certPair, error) {
+	cert := certPair{}
+	keyPair, err := tls.X509KeyPair(readCert("CERT"), readCert("KEY"))
+	if err != nil {
+		return cert, fmt.Errorf("missing or invalid CERT and KEY environment variables, %w", err)
 	}
 
-	return srv, nil
+	keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
+	if err != nil {
+		return cert, fmt.Errorf("missing or invalid CERT and KEY environment variables, %w", err)
+	}
+
+	privateKey, ok := keyPair.PrivateKey.(*rsa.PrivateKey)
+	if !ok {
+		return cert, ErrInvalidKey
+	}
+
+	log.Println("Certificate for: ", keyPair.Leaf.Subject.String())
+
+	cert = certPair{
+		keyPair:       keyPair,
+		rsaPrivateKey: privateKey,
+	}
+	return cert, nil
+}
+
+type ServiceConfig struct {
+	Certificate       certPair
+	Providers         []provider
+	RootURL           *url.URL
+	CookieMaxDuration time.Duration
 }

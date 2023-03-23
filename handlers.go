@@ -18,7 +18,11 @@ func testAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	genericSession := samlsp.SessionFromContext(r.Context())
-	jwtSession := genericSession.(samlsp.JWTSessionClaims)
+	jwtSession, ok := genericSession.(samlsp.JWTSessionClaims)
+	if !ok {
+		_, _ = fmt.Fprintf(w, "<p>Invalid claims obtained from context</p></body></html>")
+		return
+	}
 
 	name := jwtSession.Attributes.Get("sub")
 	if name != "" {

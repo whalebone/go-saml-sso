@@ -1,0 +1,138 @@
+run:
+  modules-download-mode: readonly
+  timeout: 10m
+
+linters:
+  disable-all: true
+  enable:
+    - goimports
+    - revive
+    - govet
+    - deadcode
+    - errcheck
+    - gosimple
+    - staticcheck
+    - stylecheck
+    - unused
+    - varcheck
+    - exhaustive
+    - gocritic
+    - gosec
+    - unparam
+    - whitespace
+    - exportloopref
+    - errorlint
+    - bodyclose
+    - staticcheck
+    - goerr113
+    - errname
+    - forcetypeassert
+    - nolintlint
+    - misspell
+    - godot
+    - gci
+
+    # unverified linters (not sure what they does):
+    - asciicheck
+    - bidichk
+    - cyclop
+    - depguard
+    - dogsled
+    - durationcheck
+    - gocognit
+    - gocyclo
+    - gofmt
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - importas
+    - ineffassign
+    - makezero
+    - nakedret
+    - nilerr
+    - noctx
+    - prealloc
+    - predeclared
+    - promlinter
+    - rowserrcheck
+    - sqlclosecheck
+    - structcheck
+    - tenv
+    - thelper
+    - typecheck
+    - unconvert
+    - wastedassign
+
+linters-settings:
+  govet:
+    check-shadowing: true
+
+  gocritic:
+    enabled-tags:
+      - performance
+
+  staticcheck:
+    go: "1.19"
+    checks: [ "all" ]
+
+  stylecheck:
+    go: "1.19"
+    checks: [ "all" ]
+
+  revive:
+    # see https://github.com/mgechev/revive#available-rules for details.
+    ignore-generated-header: true
+    severity: warning
+    directives:
+      - name: specify-disable-reason
+        arguments:
+          severity: "error"
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+        arguments:
+          - disableStutteringCheck
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+      - name: indent-error-flow
+        severity: warning
+      - name: add-constant
+        severity: warning
+        arguments:
+          - maxLitCount: "3"
+            allowStrs: '""'
+            allowInts: "0,1,2,3"
+            allowFloats: "0.0,0.,1.0,1.,2.0,2."
+
+issues:
+  exclude-rules:
+    - path: '(.+)_test\.go'
+      linters:
+        - goerr113
+        - gosec
+        - bodyclose
+    - path: '(.+)_test\.go'
+      linters:
+        - revive
+      text: "^add-constant:.*"
+
+output:
+  format: line-number

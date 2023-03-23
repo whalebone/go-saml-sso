@@ -16,14 +16,16 @@ import (
 	"github.com/spf13/viper"
 )
 
-// IdpCookieName defines cookie name for used SAML Ident. Provider
+// IdpCookieName defines cookie name for used SAML Ident. Provider.
 const IdpCookieName = "SAML_IDP"
 
-// ReturnURLKey Defines parameter name that has return url after SAML auth
+// ReturnURLKey Defines parameter name that has return url after SAML auth.
 const ReturnURLKey = "return"
 
-// cookieName Defines SAML token cookie name
+// cookieName Defines SAML token cookie name.
 const cookieName = "SAMLToken"
+
+const serverReadTimeout = 20 * time.Second
 
 func main() {
 	viper.AutomaticEnv()
@@ -44,7 +46,7 @@ func main() {
 	}
 
 	debug := viper.GetBool("DEBUG")
-	setupHttpHandlers(cookieDomain, maxDuration, prefix, debug)
+	setupHTTPHandlers(cookieDomain, maxDuration, prefix, debug)
 	var server *http.Server
 
 	termChan := make(chan bool, 1) // For signalling termination from main to go-routine
@@ -53,7 +55,12 @@ func main() {
 		addr := ":" + viper.GetString("PORT")
 		log.Println("Listening on port", addr)
 
-		server = &http.Server{Addr: addr, Handler: nil}
+		server = &http.Server{
+			ReadHeaderTimeout: serverReadTimeout,
+			ReadTimeout:       serverReadTimeout,
+			Addr:              addr,
+			Handler:           nil,
+		}
 		err = server.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Println("error starting server")
@@ -84,10 +91,16 @@ func main() {
 	log.Println("bye")
 }
 
-func setupHttpHandlers(cookieDomain string, maxDuration time.Duration, prefix string, enableDebug bool) {
-	samlProviders, err := configureSaml("adfs.neon", cookieDomain, maxDuration)
+func setupHTTPHandlers(cookieDomain string, maxDuration time.Duration, prefix string, enableDebug bool) {
+	config, err := parseConfigYaml("adfs.neon")
 	if err != nil {
 		log.Println("Error reading configuration")
+		panic(err)
+	}
+
+	samlProviders, err := configureSamlService(config, maxDuration)
+	if err != nil {
+		log.Println("Error configuring SAML SPs")
 		panic(err)
 	}
 

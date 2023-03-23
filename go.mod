@@ -3,7 +3,7 @@ module github.com/whalebone/go-saml-sso
 go 1.19
 
 require (
-	github.com/crewjam/saml v0.4.12
+	github.com/crewjam/saml v0.4.13
 	github.com/spf13/viper v1.15.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -33,4 +33,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace golang.org/x/crypto => golang.org/x/crypto v0.6.0
+replace golang.org/x/crypto => golang.org/x/crypto v0.6.0 //nolint // Upgrades all dependencies crypto package to 0.6.0
