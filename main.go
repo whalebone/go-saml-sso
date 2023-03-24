@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -14,42 +13,32 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	apphttp "github.com/whalebone/go-saml-sso/http"
+	"github.com/whalebone/go-saml-sso/saml"
 )
-
-// IdpCookieName defines cookie name for used SAML Ident. Provider.
-const IdpCookieName = "SAML_IDP"
-
-// ReturnURLKey Defines parameter name that has return url after SAML auth.
-const ReturnURLKey = "return"
-
-// cookieName Defines SAML token cookie name.
-const cookieName = "SAMLToken"
 
 const serverReadTimeout = 20 * time.Second
 
 func main() {
-	viper.AutomaticEnv()
-	viper.SetDefault("DOMAIN", "http://localhost:8000")
-	viper.SetDefault("COOKIE_DOMAIN", "localhost")
-	viper.SetDefault("PATH_PREFIX", "")
-	viper.SetDefault("PORT", "8000")
-	viper.SetDefault("TOKEN_MAX_AGE", "5m")
-	viper.SetDefault("DEBUG", "0")
-
-	prefix := ensureAbsolute(viper.GetString("PATH_PREFIX"))
-	log.Println("Path prefix: ", prefix)
-
-	cookieDomain := viper.GetString("COOKIE_DOMAIN")
-	maxDuration, err := time.ParseDuration(viper.GetString("TOKEN_MAX_AGE"))
+	config, err := saml.NewSAMLConfig()
 	if err != nil {
-		panic(fmt.Errorf("missing or invalid TOKEN_MAX_AGE environment variable, %w", err))
+		panic(err)
 	}
 
-	debug := viper.GetBool("DEBUG")
-	setupHTTPHandlers(cookieDomain, maxDuration, prefix, debug)
+	routerGeneratorFc := routerGenerator(config)
+	router, err := routerGeneratorFc()
+	if err != nil {
+		panic(err)
+	}
+
+	mainHandler := apphttp.NewRouterSwapper(router)
 	var server *http.Server
 
-	termChan := make(chan bool, 1) // For signalling termination from main to go-routine
+	termChan := make(chan struct{}, 1) // For signalling termination from main to go-routine
+
+	// start periodic refresh of metadata and handlers
+	go mainHandler.PeriodicRefresh(config.RefreshInterval, termChan, routerGeneratorFc)
+
 	// Start server
 	go func() {
 		addr := ":" + viper.GetString("PORT")
@@ -59,18 +48,17 @@ func main() {
 			ReadHeaderTimeout: serverReadTimeout,
 			ReadTimeout:       serverReadTimeout,
 			Addr:              addr,
-			Handler:           nil,
+			Handler:           mainHandler,
 		}
 		err = server.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Println("error starting server")
-			panic(err)
+			log.Println("server error", err)
 		}
 
-		termChan <- true
+		close(termChan)
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the app
+	// Wait for interrupt signal to gracefully shut down the app
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -91,40 +79,24 @@ func main() {
 	log.Println("bye")
 }
 
-func setupHTTPHandlers(cookieDomain string, maxDuration time.Duration, prefix string, enableDebug bool) {
-	config, err := parseConfigYaml("adfs.neon")
-	if err != nil {
-		log.Println("Error reading configuration")
-		panic(err)
-	}
-
-	samlProviders, err := configureSamlService(config, maxDuration)
-	if err != nil {
-		log.Println("Error configuring SAML SPs")
-		panic(err)
-	}
-
-	for name, samlSP := range samlProviders.samls {
-		samlPrefix := path.Join(prefix, url.PathEscape(name))
-		log.Println("Registering ", name, " to ", samlPrefix)
-		if enableDebug {
-			http.Handle(samlPrefix+"/test", samlSP.RequireAccount(http.HandlerFunc(testAuth)))
+func routerGenerator(config *saml.ServiceConfig) apphttp.RouterGeneratorFc {
+	return func() (*http.ServeMux, error) {
+		samlSvc, err := saml.NewSAMLService(config)
+		if err != nil {
+			return nil, err
 		}
-		http.Handle(samlPrefix+"/auth", samlSP.RequireAccount(http.HandlerFunc(returnIDPAfterAuth(name, cookieDomain, maxDuration))))
-		http.Handle(samlPrefix+"/saml/", samlSP)
+
+		mux := http.NewServeMux()
+		for _, provider := range samlSvc.GetProviders() {
+			samlPrefix := path.Join(config.RoutePathPrefix, url.PathEscape(provider.Name))
+			log.Println("Registering ", provider.Name, " to ", samlPrefix)
+			if config.Debug {
+				mux.Handle(samlPrefix+"/test", provider.Handler.RequireAccount(http.HandlerFunc(apphttp.TestAuth)))
+			}
+			mux.Handle(samlPrefix+"/auth", provider.Handler.RequireAccount(http.HandlerFunc(apphttp.ReturnIDPAfterAuth(provider.Name, config.CookieDomain, config.CookieMaxDuration))))
+			mux.Handle(samlPrefix+"/saml/", provider.Handler)
+		}
+
+		return mux, nil
 	}
-}
-
-// Shutdown
-
-func ensureAbsolute(path string) string {
-	if len(path) == 0 {
-		return "/"
-	}
-
-	if path[0] == '/' {
-		return path
-	}
-
-	return "/" + path
 }

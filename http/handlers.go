@@ -1,4 +1,4 @@
-package main
+package http
 
 import (
 	"encoding/json"
@@ -11,7 +11,13 @@ import (
 	"github.com/crewjam/saml/samlsp"
 )
 
-func testAuth(w http.ResponseWriter, r *http.Request) {
+// IdpCookieName defines cookie name for used SAML Ident. Provider.
+const IdpCookieName = "SAML_IDP"
+
+// ReturnURLKey Defines parameter name that has return url after SAML auth.
+const ReturnURLKey = "return"
+
+func TestAuth(w http.ResponseWriter, r *http.Request) {
 	_, err := fmt.Fprintln(w, "<html><body>")
 	if err != nil {
 		return
@@ -39,7 +45,7 @@ func testAuth(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintln(w, "</body></html>")
 }
 
-func returnIDPAfterAuth(idpName string, cookieDomain string, cookieMaxAge time.Duration) func(w http.ResponseWriter, r *http.Request) {
+func ReturnIDPAfterAuth(idpName string, cookieDomain string, cookieMaxAge time.Duration) func(w http.ResponseWriter, r *http.Request) {
 	maxAgeSeconds := int(cookieMaxAge / time.Second)
 	return func(w http.ResponseWriter, r *http.Request) {
 		returnURL, err := url.Parse(r.URL.Query().Get(ReturnURLKey))

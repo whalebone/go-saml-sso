@@ -1,4 +1,4 @@
-package main
+package saml
 
 import (
 	"context"
@@ -12,9 +12,23 @@ import (
 	"github.com/crewjam/saml/samlsp"
 )
 
-func createSAMLService(config *ServiceConfig) (*SAMLService, error) {
+// cookieName Defines SAML token cookie name.
+const cookieName = "SAMLToken"
+
+type SAMLService struct {
+	samls  map[string]*samlsp.Middleware
+	config *ServiceConfig
+}
+
+type SAMLProvider struct {
+	Name    string
+	Handler *samlsp.Middleware
+}
+
+func NewSAMLService(config *ServiceConfig) (*SAMLService, error) {
 	srv := &SAMLService{
-		samls: make(map[string]*samlsp.Middleware),
+		config: config,
+		samls:  make(map[string]*samlsp.Middleware),
 	}
 
 	for _, samlProvider := range config.Providers {
@@ -28,7 +42,7 @@ func createSAMLService(config *ServiceConfig) (*SAMLService, error) {
 
 		srv.samls[samlProvider.Name] = samlSP
 
-		log.Printf("Added provider '%s'\n", samlProvider.Name)
+		log.Printf("Fetched provider '%s'\n", samlProvider.Name)
 		log.Println("\tSSO Metadata URL: ", samlSP.ServiceProvider.MetadataURL.String())
 		log.Println("\tSSO Acs URL: ", samlSP.ServiceProvider.AcsURL.String())
 		log.Println("\tSSO NameID Format: ", samlSP.ServiceProvider.AuthnNameIDFormat)
@@ -40,7 +54,7 @@ func createSAMLService(config *ServiceConfig) (*SAMLService, error) {
 	return srv, nil
 }
 
-func createIDP(samlProvider provider, config *ServiceConfig) (*samlsp.Middleware, error) {
+func createIDP(samlProvider providerDTO, config *ServiceConfig) (*samlsp.Middleware, error) {
 	idpMetadataURL, err := url.Parse(samlProvider.Metadata)
 	if err != nil {
 		return nil, fmt.Errorf("invalid url %v: %w", samlProvider.Metadata, err)
@@ -97,4 +111,16 @@ func fetchIDPMetadata(metadataURL *url.URL) (*saml.EntityDescriptor, error) {
 		return nil, err
 	}
 	return metadata, nil
+}
+
+func (s *SAMLService) GetProviders() []*SAMLProvider {
+	result := make([]*SAMLProvider, 0, len(s.samls))
+	for name, samlSP := range s.samls {
+		result = append(result, &SAMLProvider{
+			Name:    name,
+			Handler: samlSP,
+		})
+	}
+
+	return result
 }
