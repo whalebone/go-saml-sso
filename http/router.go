@@ -53,7 +53,7 @@ func (rs *routerSwapper) PeriodicRefresh(interval time.Duration, quit <-chan str
 				continue
 			}
 			rs.Swap(newRouter)
-
+			log.Println("periodic metadata refresh finished")
 		case <-quit:
 			log.Println("quitting periodic refresh")
 			return
