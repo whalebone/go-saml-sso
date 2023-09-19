@@ -36,7 +36,6 @@ linters:
     - asciicheck
     - bidichk
     - cyclop
-    - depguard
     - dogsled
     - durationcheck
     - gocognit
