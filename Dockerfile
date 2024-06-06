@@ -3,7 +3,7 @@ FROM alpine:latest AS certs
 RUN apk add --no-cache ca-certificates
 
 # build temporary image
-FROM golang:1.20 AS build
+FROM golang:1.22 AS build
 
 WORKDIR /go/src/github.com/whalebone/go-saml-sso
 COPY go.mod go.sum ./

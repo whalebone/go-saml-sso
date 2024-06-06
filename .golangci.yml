@@ -1,6 +1,7 @@
 run:
   modules-download-mode: readonly
   timeout: 10m
+  allow-parallel-runners: true
 
 linters:
   disable-all: true
@@ -8,13 +9,11 @@ linters:
     - goimports
     - revive
     - govet
-    - deadcode
     - errcheck
     - gosimple
     - staticcheck
     - stylecheck
     - unused
-    - varcheck
     - exhaustive
     - gocritic
     - gosec
@@ -24,12 +23,10 @@ linters:
     - errorlint
     - bodyclose
     - staticcheck
-    - goerr113
+    - err113
     - errname
     - forcetypeassert
     - nolintlint
-    - misspell
-    - godot
     - gci
 
     # unverified linters (not sure what they does):
@@ -55,7 +52,6 @@ linters:
     - promlinter
     - rowserrcheck
     - sqlclosecheck
-    - structcheck
     - tenv
     - thelper
     - typecheck
@@ -64,23 +60,18 @@ linters:
 
 linters-settings:
   govet:
-    check-shadowing: true
+    enable:
+      - shadow
 
   gocritic:
     enabled-tags:
       - performance
 
   staticcheck:
-    go: "1.20"
-    checks: [ "all" ]
+    checks: ["all"]
 
   stylecheck:
-    go: "1.20"
-    checks: [ "all" ]
-
-  gomoddirectives:
-    replace-allow-list:
-      - golang.org/x/crypto
+    checks: ["all"]
 
   revive:
     # see https://github.com/mgechev/revive#available-rules for details.
@@ -121,7 +112,7 @@ linters-settings:
         severity: warning
         arguments:
           - maxLitCount: "3"
-            allowStrs: '""'
+            allowStrs: '"","%w %w","%s %w","%w : %s"'
             allowInts: "0,1,2,3"
             allowFloats: "0.0,0.,1.0,1.,2.0,2."
 
@@ -129,7 +120,7 @@ issues:
   exclude-rules:
     - path: '(.+)_test\.go'
       linters:
-        - goerr113
+        - err113
         - gosec
         - bodyclose
     - path: '(.+)_test\.go'
@@ -138,4 +129,6 @@ issues:
       text: "^add-constant:.*"
 
 output:
-  format: line-number
+  formats:
+    - format: line-number
+      path: stderr
