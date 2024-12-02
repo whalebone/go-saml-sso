@@ -7,6 +7,10 @@ parameters:
             idpParam: idp
         providers:
             -
-                name: samltest
-                metadata: 'https://samltest.id/saml/idp'
+                name: mocksamlurl
+                metadata: 'https://mocksaml.com/api/saml/metadata'
+                nameid_format: 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified'
+            -
+                name: mocksamlfile
+                metadata: 'file:///metadata/mock-saml-metadata.xml'
                 nameid_format: 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified'

@@ -9,9 +9,12 @@ services:
             DOMAIN: 'http://localhost:8999/sso/'
             COOKIE_DOMAIN: 'localhost'
             PATH_PREFIX: '/sso'
+            DEBUG: 1
             PORT: '8000'
             TOKEN_MAX_AGE: '5m'
             CERT: ''
             KEY: ''
         ports:
             - 8999:8000/tcp
+        volumes:
+            -   ./metadata:/metadata

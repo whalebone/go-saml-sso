@@ -3,9 +3,11 @@ package saml
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 
 	"github.com/crewjam/saml"
@@ -14,6 +16,7 @@ import (
 
 // cookieName Defines SAML token cookie name.
 const cookieName = "SAMLToken"
+const fileSchema = "file"
 
 type SAMLService struct {
 	samls  map[string]*samlsp.Middleware
@@ -37,12 +40,12 @@ func NewSAMLService(config *ServiceConfig) (*SAMLService, error) {
 		}
 		samlSP, err := createIDP(samlProvider, config)
 		if err != nil {
-			return nil, fmt.Errorf("%w with name '%s'", ErrProviderRegistrationFailed, samlProvider.Name)
+			return nil, fmt.Errorf("%w with name '%s': %w", ErrProviderRegistrationFailed, samlProvider.Name, err)
 		}
 
 		srv.samls[samlProvider.Name] = samlSP
 
-		log.Printf("Fetched provider '%s'\n", samlProvider.Name)
+		log.Printf("Created provider '%s'\n", samlProvider.Name)
 		log.Println("\tSSO Metadata URL: ", samlSP.ServiceProvider.MetadataURL.String())
 		log.Println("\tSSO Acs URL: ", samlSP.ServiceProvider.AcsURL.String())
 		log.Println("\tSSO NameID Format: ", samlSP.ServiceProvider.AuthnNameIDFormat)
@@ -60,9 +63,17 @@ func createIDP(samlProvider providerDTO, config *ServiceConfig) (*samlsp.Middlew
 		return nil, fmt.Errorf("invalid url %v: %w", samlProvider.Metadata, err)
 	}
 
-	idpDescriptor, err := fetchIDPMetadata(idpMetadataURL)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching idp metadata %v: %w", samlProvider.Metadata, err)
+	var idpDescriptor *saml.EntityDescriptor
+	if idpMetadataURL.Scheme == fileSchema {
+		idpDescriptor, err = loadIDPMetadata(idpMetadataURL.Path)
+		if err != nil {
+			return nil, fmt.Errorf("error loading idp metadata %v: %w", samlProvider.Metadata, err)
+		}
+	} else {
+		idpDescriptor, err = fetchIDPMetadata(idpMetadataURL)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching idp metadata %v: %w", samlProvider.Metadata, err)
+		}
 	}
 
 	samlURL, err := config.RootURL.Parse(path.Join(config.RootURL.Path, url.PathEscape(samlProvider.Name)) + "/")
@@ -111,6 +122,31 @@ func fetchIDPMetadata(metadataURL *url.URL) (*saml.EntityDescriptor, error) {
 		return nil, err
 	}
 	return metadata, nil
+}
+
+func loadIDPMetadata(metadataPath string) (*saml.EntityDescriptor, error) {
+	log.Println("Loading metadata from file ", metadataPath)
+	data, err := readFile(metadataPath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading metadata file %s: %w", metadataPath, err)
+	}
+
+	metadata, err := samlsp.ParseMetadata(data)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing metadata file %s: %w", metadataPath, err)
+	}
+	return metadata, nil
+}
+
+func readFile(metadataPath string) ([]byte, error) {
+	file, err := os.Open(metadataPath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer file.Close()
+
+	return io.ReadAll(file)
 }
 
 func (s *SAMLService) GetProviders() []*SAMLProvider {

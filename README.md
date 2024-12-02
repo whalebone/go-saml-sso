@@ -16,5 +16,13 @@ ENVs for docker container:
 - DEBUG - set to 1 to enable the test endpoint, default 0
 
 Urls:
-- **/test** - Requires SAML authentication and outputs resulting Claims
+- **/test** - Requires SAML authentication and outputs resulting Claims (Only available if DEBUG=1)
 - **/auth?return=&lt;returnUrl&gt;** - Performs SAML authentication, stores result in JWT token with name **`SAMLtoken`** and redirects user back to **`returnUrl`**
+
+**adfs.neon** file contains configuration of allowed IDPs to authorize.
+Metadata can be fetched from public metadata url or provided as a local file to the service.
+
+Before using:
+- Generate certificates
+- Update adfs.neon file with correct values of allowed SAML IDPs
+- Optionally uncomment line in Dockerfile to build metadata files directly into the image

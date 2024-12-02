@@ -43,11 +43,3 @@ jobs:
         skip-pkg-cache: true
         # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
         skip-build-cache: true
-
-    - uses: snyk/actions/setup@master
-    - name: Snyk test vulnerabilities
-      run: snyk test
-      continue-on-error: true
-      timeout-minutes: 2
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
