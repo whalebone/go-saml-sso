@@ -1,0 +1,16 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: go-saml-sso
+  title: Admin Portal SAML SSO
+  description: SAML authentication service for the Admin Portal; authenticates users against configured ADFS IdPs and returns a short-lived JWT, served under /sso.
+  annotations:
+    github.com/project-slug: whalebone/go-saml-sso
+  links:
+    - title: k8s-wb
+      url: https://github.com/whalebone/k8s-wb/tree/HEAD/deployments/portal/components/sso
+spec:
+  type: service
+  lifecycle: production
+  owner: aegis
+  system: admin-portal
